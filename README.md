@@ -2,7 +2,7 @@ Simple Contentful App to automatically generate an entry title from one or more 
 
 This project was bootstrapped with [Create Contentful App](https://github.com/contentful/create-contentful-app).
 
-![Example Entry](https://raw.githubusercontent.com/nerdess/contentful-lexical/main/public/images/entry.png)
+![Example Entry](https://raw.githubusercontent.com/nerdess/contentful-autotitle/main/public/images/entry.png)
 
 ## How to install
 
@@ -26,9 +26,9 @@ yarn run build
 
 4. At the bottom, click "Add instance parameter definition" and add add the following new parameter:
 
-![Field-Ids](https://raw.githubusercontent.com/nerdess/contentful-lexical/main/public/images/fieldIds.png)
+    ![Field-Ids](https://raw.githubusercontent.com/nerdess/contentful-autotitle/main/public/images/fieldIds.png)
 
-...hit save! 
+    ...hit save! 
 
 5. "Go to Apps > Custom apps", find the app you just created and install it.
 
