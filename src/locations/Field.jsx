@@ -5,9 +5,16 @@ import { TextInput, FormControl } from '@contentful/f36-components';
 
 const DATE_FORMAT = { year: 'numeric', month: '2-digit', day: '2-digit' };
 
+const getLang = () => {
+  if (navigator.languages != undefined) 
+    return navigator.languages[0]; 
+  return navigator.language;
+}
+
 const Field = () => {
 
 	const sdk = useSDK();
+	console.log(sdk)
 	const window = sdk.window;
 	useEffect(() => {
 		window.startAutoResizer();
@@ -31,7 +38,7 @@ const Field = () => {
 
 				if (field.type === 'Date' && field.getValue()) {
 					const date = new Date(field.getValue());
-					return date.toLocaleDateString('de-DE', DATE_FORMAT);
+					return date.toLocaleDateString(getLang(), DATE_FORMAT);
 				}
 
 				return field.getValue();
