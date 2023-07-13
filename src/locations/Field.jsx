@@ -1,123 +1,143 @@
-import { useEffect, useState, useMemo } from 'react';
-import { Note, Stack, TextLink } from '@contentful/f36-components';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Spinner, Note, Stack, TextLink, TextInput, FormControl } from '@contentful/f36-components';
 import { useSDK } from '@contentful/react-apps-toolkit';
-import { TextInput, FormControl } from '@contentful/f36-components';
-
+import getEntryTitleField  from '../lib/utils/getEntryTitleField';
+import getNavigatorLanguage from '../lib/utils/getNavigatorLanguage';
+import useCMA from '../lib/hooks/useCMA';
 
 const DATE_FORMAT = { year: 'numeric', month: '2-digit', day: '2-digit' };
-
-const getEntryTitle =  (sdk, id ) => {
-
-	return new Promise((resolve, reject) => {
-
-		sdk?.space.getEntry(id)
-		.then((entry) => {
-	
-			sdk.space
-				.getContentType(entry.sys.contentType.sys.id)
-				.then((contentType) => {
-					resolve(entry.fields[contentType.displayField]);
-				});
-	
-		})
-		.catch(error => {
-		  console.log('Error:', error);
-		  reject(error);
-		});
-
-	});
-
-}
-
-const getLang = () => {
-	if (navigator.languages !== undefined) return navigator.languages[0];
-	return navigator.language;
-};
+const POLLING_INTERVAL = 5000;
 
 const getValue = (field) => {
 
 	if (field.type === 'Date' && field.getValue()) {
 		const date = new Date(field.getValue());
-		return date.toLocaleDateString(getLang(), DATE_FORMAT);
+		return date.toLocaleDateString(getNavigatorLanguage(), DATE_FORMAT);
 		
 	}
 	return field.getValue();
 }
 
+
 const Field = () => {
 
 	const sdk = useSDK();
+	const {
+		isLoading,
+		space,
+		environment
+	} = useCMA();
 	const [entryValues, setEntryValues] = useState({});
-
 	const locale = sdk.locales.default;
 	const window = sdk.window;
-
 	const fieldIds = useMemo(() => sdk.parameters.instance.fieldIds.split(',').map((fieldId) => fieldId.trim()), [sdk]);
 	const fieldsMetadata = fieldIds.map((fieldId) => sdk.contentType.fields.find(({ id }) => id === fieldId)).filter((field) => field);
-
-
 	const fields = useMemo(() => {
 		return fieldIds.map((fieldId) => {
 			const field = sdk.entry.fields[fieldId];
 			return field;
 		})
 		.filter((field) => field);
-	}, [sdk, fieldIds]) 
+	}, [sdk, fieldIds]);
 
-	const notFound = fieldIds.filter((fieldId) => !sdk.entry.fields[fieldId])
+	const setTitleField = useCallback((entryId, fieldId, setEntryValues) => {
+
+		if (!environment) return;
+
+		if (!entryId) {
+			setEntryValues((prev) => ({
+				...prev,
+				[fieldId]: null
+			}));
+			return;
+		}
+	
+		getEntryTitleField(environment, entryId).then((titleField) => {
+	
+			const newTitle = titleField ? titleField[locale] : null;
+	
+			setEntryValues((prev) => {
+	
+				if (prev[fieldId] !== newTitle) {
+					return {
+						...prev,
+						[fieldId]: newTitle
+					}
+				};
+	
+				return prev
+	
+			});
+		});
+	}, [environment, locale]);
+
+	const notFound = fieldIds.filter((fieldId) => !sdk.entry.fields[fieldId]);
+
+	useEffect(() => {
+		window.startAutoResizer();
+		return () => window.stopAutoResizer();
+	}, [window]);
 
 
 	useEffect(() => {
 
+		const intervals = [];
+
 		fields.forEach((field) => {
 
-			//grab all static fields (the referenced ones)
-			if (field.type === 'Link' && field.getValue()) {
-				const {
-					sys
-				} = field.getValue();
-				
-				getEntryTitle(sdk, sys.id).then((title) => {
-					setEntryValues((prev) => ({
-						...prev,
-						[field.id]: title[locale]
-					}));
+			//all static fields (the referenced ones)
+			if (field.type === 'Link') {
+
+				field.onValueChanged(() => {
+					const { sys } = field.getValue() || {} ;
+					setTitleField(sys?.id, field.id, setEntryValues);
 				});
+
+				const interval = setInterval(() => {
+					const {sys} = field.getValue() || {} ;
+					setTitleField(sys?.id, field.id, setEntryValues);
+				}, POLLING_INTERVAL);
+
+				intervals.push(interval);
+
+				return;
+			
 			}
 
-			//then set listeners to the fields that can change
+			//all normal fields
 			field.onValueChanged(() => {
-
-				if (field.type === 'Link') return;
 
 				setEntryValues((prev) => ({
 					...prev,
 					[field.id]: getValue(field)
 				}));
+			
 
 			});
 		});
 
-		return () => setEntryValues({});
+		return () => {
+			setEntryValues({});
+			intervals.forEach((interval) => clearInterval(interval));
+		};
 		
-	}, [fields, sdk, setEntryValues, locale])
+	}, [space, fields, locale, setEntryValues, setTitleField])
+
 
 
 	const result = fieldIds.map((fieldId) => entryValues[fieldId] || null);
 	const resultFiltered = result.filter((value) => value);
 	const joined = resultFiltered.join(' - ');
 
-	console.log('joined', joined);
-
-	if (joined !== sdk.field.getValue() && fieldIds.length - notFound.length === result.length) {
+	//set the value only if it is different and all relevant fields are found
+	if (joined !== sdk.field.getValue() && fieldIds.length - notFound.length === Object.keys(entryValues).length) {
+		console.log('setting value');
 		sdk.field.setValue(joined);
 	}
 	
-
-	useEffect(() => {
-		window.startAutoResizer();
-		return () => window.stopAutoResizer();
-	}, [window]);
+	if (isLoading) {
+		return <Spinner />
+	}
 
 	if (!sdk.parameters.instance.hasOwnProperty('fieldIds')) {
 		return (

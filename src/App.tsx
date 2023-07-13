@@ -20,6 +20,7 @@ const ComponentLocationSettings = {
 };
 
 const App = () => {
+
   const sdk = useSDK();
 
   const Component = useMemo(() => {
