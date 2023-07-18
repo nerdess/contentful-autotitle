@@ -40,24 +40,31 @@ const Field = () => {
 		.filter((field) => field);
 	}, [sdk, fieldIds]);
 
-	const setTitleField = useCallback((entryId, fieldId, setEntryValues) => {
+	const titleFieldCallback = useCallback((values = [], fieldId = '') => {
 
 		if (!environment) return;
+	
 
-		if (!entryId) {
-			setEntryValues((prev) => ({
-				...prev,
-				[fieldId]: null
-			}));
-			return;
-		}
-	
-		getEntryTitleField(environment, entryId).then((titleField) => {
-	
-			const newTitle = titleField ? titleField[locale] : null;
-	
+		const promises = values.map((value) => {
+
+			const {
+				id
+			} = value?.sys || {};
+
+			return getEntryTitleField(environment, id);
+
+		})
+
+		const wrappedPromises = promises.map(p => Promise.resolve(p).then(
+            value => ({ status: 'fulfilled', ...value }),
+            error => ({ status: 'rejected', error })));
+        
+        Promise.all(wrappedPromises).then((titles) => {
+
+			const newTitle = titles.filter((title) => title.status === 'fulfilled' && title[locale] ).map((title) => title[locale]).join(' - ');
+
 			setEntryValues((prev) => {
-	
+		
 				if (prev[fieldId] !== newTitle) {
 					return {
 						...prev,
@@ -68,7 +75,9 @@ const Field = () => {
 				return prev
 	
 			});
+        }).catch((error) => {
 		});
+
 	}, [environment, locale]);
 
 	const notFound = fieldIds.filter((fieldId) => !sdk.entry.fields[fieldId]);
@@ -85,26 +94,25 @@ const Field = () => {
 
 		fields.forEach((field) => {
 
-			//all static fields (the referenced ones)
-			if (field.type === 'Link') {
+			//static fields (references)
+			if (field.type === 'Link' || field.type === 'Array') {
 
 				field.onValueChanged(() => {
-					const { sys } = field.getValue() || {} ;
-					setTitleField(sys?.id, field.id, setEntryValues);
+					const values = field.type === 'Link' ? [field.getValue()] : field.getValue();
+					titleFieldCallback(values, field.id);
 				});
 
 				const interval = setInterval(() => {
-					const {sys} = field.getValue() || {} ;
-					setTitleField(sys?.id, field.id, setEntryValues);
+					const values = field.type === 'Link' ? [field.getValue()] : field.getValue();
+					titleFieldCallback(values, field.id);
 				}, POLLING_INTERVAL);
 
 				intervals.push(interval);
-
 				return;
-			
+
 			}
 
-			//all normal fields
+			//normal fields
 			field.onValueChanged(() => {
 
 				setEntryValues((prev) => ({
@@ -112,16 +120,16 @@ const Field = () => {
 					[field.id]: getValue(field)
 				}));
 			
-
 			});
 		});
+
 
 		return () => {
 			setEntryValues({});
 			intervals.forEach((interval) => clearInterval(interval));
 		};
 		
-	}, [space, fields, locale, setEntryValues, setTitleField])
+	}, [space, fields, locale, setEntryValues, titleFieldCallback])
 
 
 
@@ -131,7 +139,7 @@ const Field = () => {
 
 	//set the value only if it is different and all relevant fields are found
 	if (joined !== sdk.field.getValue() && fieldIds.length - notFound.length === Object.keys(entryValues).length) {
-		console.log('setting value');
+		//console.log('setting value');
 		sdk.field.setValue(joined);
 	}
 	
