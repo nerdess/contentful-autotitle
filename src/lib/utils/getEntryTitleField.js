@@ -6,7 +6,7 @@ const getEntryTitleField = (environment, id) => {
 			reject('No environment or id provided');
 			return;
 		}
-	
+
 		environment.getEntry(id)
 		.then((entry) => {
 			environment

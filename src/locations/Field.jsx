@@ -2,21 +2,10 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Spinner, Note, Stack, TextLink, TextInput, FormControl } from '@contentful/f36-components';
 import { useSDK } from '@contentful/react-apps-toolkit';
 import getEntryTitleField  from '../lib/utils/getEntryTitleField';
-import getNavigatorLanguage from '../lib/utils/getNavigatorLanguage';
 import useCMA from '../lib/hooks/useCMA';
 
 const DATE_FORMAT = { year: 'numeric', month: '2-digit', day: '2-digit' };
 const POLLING_INTERVAL = 5000;
-
-const getValue = (field) => {
-
-	if (field.type === 'Date' && field.getValue()) {
-		const date = new Date(field.getValue());
-		return date.toLocaleDateString(getNavigatorLanguage(), DATE_FORMAT);
-		
-	}
-	return field.getValue();
-}
 
 
 const Field = () => {
@@ -44,7 +33,6 @@ const Field = () => {
 
 		if (!environment) return;
 	
-
 		const promises = values.map((value) => {
 
 			const {
@@ -95,7 +83,7 @@ const Field = () => {
 		fields.forEach((field) => {
 
 			//static fields (references)
-			if (field.type === 'Link' || field.type === 'Array') {
+			if (field.type === 'Link' || (field.type === 'Array' && field.items.type === 'Link')) {
 
 				field.onValueChanged(() => {
 					const values = field.type === 'Link' ? [field.getValue()] : field.getValue();
@@ -115,9 +103,29 @@ const Field = () => {
 			//normal fields
 			field.onValueChanged(() => {
 
+				if (field.type === 'Date' && field.getValue()) {
+					const date = new Date(field.getValue());
+					setEntryValues((prev) => ({
+						...prev,
+						[field.id]: date.toLocaleDateString(
+							locale,
+							DATE_FORMAT
+						),
+					}));
+					return;
+				}
+
+				if (field.type === 'Array') {
+					setEntryValues((prev) => ({
+						...prev,
+						[field.id]: field.getValue() ? field.getValue().join(' - ') : null,
+					}));
+					return;
+				}
+
 				setEntryValues((prev) => ({
 					...prev,
-					[field.id]: getValue(field)
+					[field.id]: field.getValue(),
 				}));
 			
 			});
