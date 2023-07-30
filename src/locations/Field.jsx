@@ -8,6 +8,18 @@ const DATE_FORMAT = { year: 'numeric', month: '2-digit', day: '2-digit' };
 const POLLING_INTERVAL = 5000;
 
 
+const joinFieldValuesToString = ({field = {}, fieldIds = [], entryValues = []}) => {
+
+	const result = fieldIds.map((fieldId) => entryValues[fieldId] || null).filter((value) => value).join(' - ');
+
+	return {
+		joined: (field.type === 'Symbol') ? result.slice(0, 256) : result,
+		isSliced: (field.type === 'Symbol') && result.length > 256
+	};
+};
+
+
+
 const Field = () => {
 
 	const sdk = useSDK();
@@ -139,11 +151,10 @@ const Field = () => {
 		
 	}, [space, fields, locale, setEntryValues, titleFieldCallback])
 
-
-
-	const result = fieldIds.map((fieldId) => entryValues[fieldId] || null);
-	const resultFiltered = result.filter((value) => value);
-	const joined = resultFiltered.join(' - ');
+	const {
+		joined,
+		isSliced
+	} = joinFieldValuesToString({field: sdk.field, fieldIds, entryValues});
 
 	//set the value only if it is different and all relevant fields are found
 	if (joined !== sdk.field.getValue() && fieldIds.length - notFound.length === Object.keys(entryValues).length) {
@@ -198,12 +209,18 @@ const Field = () => {
 			</div>
 
 			{notFound.length > 0 && (
-				<Note variant='negative' style={{ width: '100%' }}>
+				<Note variant='warning' style={{ width: '100%' }}>
 					Some autotitle field-Ids were not found:{' '}
 					<strong>{notFound.join(' ')}</strong>
 					<br />
 					Please define correct field-Ids in the content model (entry title{' '}
 					{`>`} appearance) 😀
+				</Note>
+			)}
+
+			{isSliced && (
+				<Note variant='warning' style={{ width: '100%' }}>
+					This field only allows max 256 characters. The generated title is longer so it was cut to fit 🔪
 				</Note>
 			)}
 		</Stack>
